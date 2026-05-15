@@ -31,7 +31,16 @@ def parse_args():
     )
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--simple", action="store_true", help="one-line summary")
-    group.add_argument("--json", action="store_true", help="raw Ookla JSON result")
+    group.add_argument(
+        "--json",
+        action="store_true",
+        help="compact JSON: download_mbps, upload_mbps, ping_ms, server fields",
+    )
+    group.add_argument(
+        "--raw-json",
+        action="store_true",
+        help="Ookla's full raw JSON result (every field)",
+    )
     parser.add_argument("--server-id", type=int, help="use a specific Ookla server ID")
     parser.add_argument("--no-color", action="store_true", help="disable ANSI colors")
     return parser.parse_args()
@@ -246,15 +255,32 @@ def print_summary(result):
         print(f"  {C.DIM}Result:{C.RESET} {url}")
 
 
+def to_compact_schema(result):
+    server = result.get("server", {}) or {}
+    return {
+        "download_mbps": round(bytes_per_sec_to_mbps(result["download"]["bandwidth"]), 2),
+        "upload_mbps": round(bytes_per_sec_to_mbps(result["upload"]["bandwidth"]), 2),
+        "ping_ms": round((result.get("ping") or {}).get("latency", 0), 2),
+        "server_name": server.get("location"),
+        "server_country": server.get("country"),
+        "server_sponsor": server.get("name"),
+    }
+
+
 def main():
     args = parse_args()
     if args.no_color or not sys.stdout.isatty():
         disable_colors()
     ensure_speedtest()
 
-    if args.json:
+    if args.raw_json:
         result = quiet_run(args.server_id)
         print(json.dumps(result, indent=2))
+        return
+
+    if args.json:
+        result = quiet_run(args.server_id)
+        print(json.dumps(to_compact_schema(result), indent=2))
         return
 
     if args.simple:

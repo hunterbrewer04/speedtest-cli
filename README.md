@@ -39,7 +39,8 @@ ln -s /path/to/run_speedtest.py ~/.local/bin/speedtest-cli
 ```bash
 speedtest-cli                    # live progress + formatted summary
 speedtest-cli --simple           # one-line summary
-speedtest-cli --json             # raw Ookla JSON result
+speedtest-cli --json             # compact JSON (download_mbps, upload_mbps, ping_ms, server fields)
+speedtest-cli --raw-json         # Ookla's full raw JSON (jitter, packet loss, result URL, etc.)
 speedtest-cli --server-id 1234   # pin a specific Ookla server
 speedtest-cli --no-color         # disable ANSI colors
 ```
