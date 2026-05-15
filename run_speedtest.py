@@ -51,11 +51,30 @@ def ensure_speedtest():
             f"       Install it from {INSTALL_URL}\n"
         )
         sys.exit(1)
+
+    try:
+        version = subprocess.run(
+            [path, "--version"], capture_output=True, text=True, timeout=5
+        )
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        sys.stderr.write(
+            f"{C.RED}Error:{C.RESET} could not run `{path} --version`: {exc}\n"
+        )
+        sys.exit(1)
+
+    if "Ookla" not in (version.stdout or "") + (version.stderr or ""):
+        sys.stderr.write(
+            f"{C.RED}Error:{C.RESET} `{path}` is not Ookla's official speedtest CLI.\n"
+            "       (The Python `speedtest-cli` pip package installs a conflicting `speedtest` command.)\n"
+            f"       Install Ookla's CLI from {INSTALL_URL}\n"
+        )
+        sys.exit(1)
+
     return path
 
 
-def bps_to_mbps(bps):
-    return bps * 8 / 1_000_000
+def bytes_per_sec_to_mbps(bytes_per_sec):
+    return bytes_per_sec * 8 / 1_000_000
 
 
 def bar(progress):
@@ -64,9 +83,9 @@ def bar(progress):
     return "█" * filled + "░" * (BAR_WIDTH - filled)
 
 
-def render_progress(color, label, progress, value, unit):
+def render_progress(color, marker, label, progress, value, unit):
     line = (
-        f"\r  {color}{label:<10}{C.RESET} "
+        f"\r  {color}{marker} {label:<8}{C.RESET} "
         f"{bar(progress)} {value:>7.2f} {C.DIM}{unit}{C.RESET}  "
     )
     sys.stdout.write(line)
@@ -84,9 +103,7 @@ def stream_run(server_id):
     if server_id is not None:
         cmd += ["--server-id", str(server_id)]
 
-    proc = subprocess.Popen(
-        cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1
-    )
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, text=True, bufsize=1)
 
     header_printed = False
     current_phase = None
@@ -112,7 +129,8 @@ def stream_run(server_id):
                 current_phase = "ping"
             ping = evt.get("ping", {})
             render_progress(
-                C.YELLOW + "●",
+                C.YELLOW,
+                "●",
                 "Ping",
                 ping.get("progress", 0),
                 ping.get("latency", 0),
@@ -126,10 +144,11 @@ def stream_run(server_id):
                 current_phase = "download"
             dl = evt.get("download", {})
             render_progress(
-                C.GREEN + "↓",
+                C.GREEN,
+                "↓",
                 "Download",
                 dl.get("progress", 0),
-                bps_to_mbps(dl.get("bandwidth", 0)),
+                bytes_per_sec_to_mbps(dl.get("bandwidth", 0)),
                 "Mbps",
             )
 
@@ -140,10 +159,11 @@ def stream_run(server_id):
                 current_phase = "upload"
             up = evt.get("upload", {})
             render_progress(
-                C.BLUE + "↑",
+                C.BLUE,
+                "↑",
                 "Upload",
                 up.get("progress", 0),
-                bps_to_mbps(up.get("bandwidth", 0)),
+                bytes_per_sec_to_mbps(up.get("bandwidth", 0)),
                 "Mbps",
             )
 
@@ -155,7 +175,6 @@ def stream_run(server_id):
 
     proc.wait()
     if proc.returncode != 0:
-        sys.stderr.write(proc.stderr.read())
         sys.exit(proc.returncode)
 
     return result
@@ -195,8 +214,8 @@ def print_header(evt):
 
 
 def print_summary(result):
-    download = bps_to_mbps(result["download"]["bandwidth"])
-    upload = bps_to_mbps(result["upload"]["bandwidth"])
+    download = bytes_per_sec_to_mbps(result["download"]["bandwidth"])
+    upload = bytes_per_sec_to_mbps(result["upload"]["bandwidth"])
     ping_data = result.get("ping", {}) or {}
     ping = ping_data.get("latency", 0)
     jitter = ping_data.get("jitter", 0)
@@ -240,8 +259,8 @@ def main():
 
     if args.simple:
         result = quiet_run(args.server_id)
-        download = bps_to_mbps(result["download"]["bandwidth"])
-        upload = bps_to_mbps(result["upload"]["bandwidth"])
+        download = bytes_per_sec_to_mbps(result["download"]["bandwidth"])
+        upload = bytes_per_sec_to_mbps(result["upload"]["bandwidth"])
         ping = (result.get("ping") or {}).get("latency", 0)
         print(
             f"Ping: {ping:.2f} ms  Down: {download:.2f} Mbps  Up: {upload:.2f} Mbps"

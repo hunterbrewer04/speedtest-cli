@@ -51,9 +51,9 @@ Speedtest by Ookla
   ISP   : Comcast
   Server: Chicago, IL, United States
 
+  ● Ping       ████████████████████████████   14.32 ms
   ↓ Download   ████████████████████████████  245.31 Mbps
   ↑ Upload     ████████████████████████████   12.04 Mbps
-  ● Ping       ████████████████████████████   14.32 ms
 
 ────────────────────────────────────────────────────
   ↓ Download     245.31 Mbps
