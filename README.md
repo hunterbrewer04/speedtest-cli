@@ -4,6 +4,11 @@ A nicer terminal front-end for [Ookla's official `speedtest` CLI](https://www.sp
 It runs the real Ookla test (for accurate results) and renders live progress bars
 plus a formatted summary instead of Ookla's default output.
 
+<p align="center">
+  <img src="docs/demo.gif" alt="speedtest-cli running: ISP and server header, live ping, download and upload progress bars, then a summary with download, upload, latency, jitter, packet loss and a result link" width="800">
+</p>
+<p align="center"><sub>Recorded with <a href="https://github.com/charmbracelet/vhs">vhs</a> from <a href="docs/demo.tape"><code>docs/demo.tape</code></a>. The rendering is the real wrapper; the test itself is a replay with made-up numbers from <a href="docs/demo-bin/speedtest"><code>docs/demo-bin/speedtest</code></a>, a stand-in for Ookla's CLI.</sub></p>
+
 ## Requirements
 
 Install Ookla's `speedtest` binary (the official one, **not** the Python
