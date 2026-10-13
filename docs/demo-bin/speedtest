@@ -1,0 +1,141 @@
+#!/usr/bin/env python3
+"""Stand-in for Ookla's `speedtest`, used only to record docs/demo.gif.
+
+It replays a made-up test as Ookla's JSONL event stream, so the recording shows the
+wrapper's real rendering without touching the network or revealing anything about the
+connection it was recorded on. docs/demo.tape puts this directory first on PATH.
+"""
+
+import json
+import math
+import random
+import sys
+import time
+
+ISP = "AT&T"
+SERVER = {
+    "id": 0,
+    "host": "speedtest.example.net",
+    "port": 8080,
+    "name": "Demo Fiber",
+    "location": "Springfield, IL",
+    "country": "United States",
+    "ip": "192.0.2.10",
+}
+INTERFACE = {
+    "internalIp": "192.0.2.20",
+    "name": "en0",
+    "macAddr": "00:00:00:00:00:00",
+    "isVpn": False,
+    "externalIp": "198.51.100.20",
+}
+RESULT_ID = "00000000-0000-0000-0000-000000000000"
+
+PING_MS = 11.42
+JITTER_MS = 0.73
+DOWNLOAD_MBPS = 486.73
+UPLOAD_MBPS = 452.18
+
+TICK = 0.1  # seconds between progress events
+PING_SECONDS = 1.5
+DOWNLOAD_SECONDS = 6.0
+UPLOAD_SECONDS = 5.0
+
+rng = random.Random(7)
+
+
+def mbps_to_bytes_per_sec(mbps):
+    return int(mbps * 1_000_000 / 8)
+
+
+def timestamp():
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+def emit(event):
+    event = {"type": event.pop("type"), "timestamp": timestamp(), **event}
+    sys.stdout.write(json.dumps(event) + "\n")
+    sys.stdout.flush()
+
+
+def steps(seconds):
+    count = int(seconds / TICK)
+    for i in range(1, count + 1):
+        yield i / count
+        time.sleep(TICK)
+
+
+def replay_ping():
+    for progress in steps(PING_SECONDS):
+        latency = PING_MS + rng.uniform(-1, 1) * (1 - progress)
+        emit({"type": "ping", "ping": {"jitter": JITTER_MS, "latency": latency, "progress": progress}})
+
+
+def replay_transfer(kind, mbps, seconds):
+    target = mbps_to_bytes_per_sec(mbps)
+    for progress in steps(seconds):
+        # Ookla reports a running average, so it climbs fast and then settles.
+        ramp = 1 - math.exp(-progress * 7)
+        noise = 1 + rng.uniform(-0.03, 0.03) * (1 - progress)
+        bandwidth = target if progress >= 1 else int(target * ramp * noise)
+        elapsed = int(progress * seconds * 1000)
+        emit({
+            "type": kind,
+            kind: {
+                "bandwidth": bandwidth,
+                "bytes": bandwidth * elapsed // 1000,
+                "elapsed": elapsed,
+                "progress": progress,
+            },
+        })
+
+
+def transfer_result(mbps, seconds):
+    bandwidth = mbps_to_bytes_per_sec(mbps)
+    return {
+        "bandwidth": bandwidth,
+        "bytes": int(bandwidth * seconds),
+        "elapsed": int(seconds * 1000),
+        "latency": {"iqm": PING_MS + 2.1, "low": PING_MS, "high": PING_MS + 6.8, "jitter": 1.12},
+    }
+
+
+def result():
+    return {
+        "type": "result",
+        "ping": {"jitter": JITTER_MS, "latency": PING_MS, "low": PING_MS - 0.6, "high": PING_MS + 1.4},
+        "download": transfer_result(DOWNLOAD_MBPS, DOWNLOAD_SECONDS),
+        "upload": transfer_result(UPLOAD_MBPS, UPLOAD_SECONDS),
+        "packetLoss": 0,
+        "isp": ISP,
+        "interface": INTERFACE,
+        "server": SERVER,
+        "result": {
+            "id": RESULT_ID,
+            "url": f"https://www.speedtest.net/result/c/{RESULT_ID}",
+            "persisted": False,
+        },
+    }
+
+
+def main():
+    args = sys.argv[1:]
+    if "--version" in args or "-V" in args:
+        print("Speedtest by Ookla 1.2.0.84 (demo stand-in, not the real CLI)")
+        return
+
+    if "--format=jsonl" not in args:
+        event = result()
+        event["timestamp"] = timestamp()
+        print(json.dumps(event))
+        return
+
+    emit({"type": "testStart", "isp": ISP, "interface": INTERFACE, "server": SERVER})
+    replay_ping()
+    replay_transfer("download", DOWNLOAD_MBPS, DOWNLOAD_SECONDS)
+    replay_transfer("upload", UPLOAD_MBPS, UPLOAD_SECONDS)
+    emit(result())
+
+
+if __name__ == "__main__":
+    main()
